@@ -1,20 +1,23 @@
 package com.jason.myapplication;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Point;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
-import android.util.DisplayMetrics;
 import android.view.MotionEvent;
-import android.view.View;
+import android.widget.ImageView;
 
 /**
  * @author zjh
  * @date 2016/11/22
  */
-public class ClipView extends View{
+public class ClipView extends ImageView{
     private int currentStauts; //是否为拖到状态
     private static final int STATUS_INSIDE_DRAG = 1; //拖拽状态
     private static final int STATUS_OUTSIDE_DRAG = 2;
@@ -28,8 +31,7 @@ public class ClipView extends View{
     private Paint mRectPaint = new Paint(); //矩形画笔
     private Paint mCirclePaint = new Paint();
     private Point startPoint = new Point(10,10); //起始点
-    private Point endPoint = new Point();
-    private boolean isInitDraw = false; //是否进行绘制
+    private boolean isInitDrawRect = false; //是否进行绘制矩形
     private final int radius = 30; //半径
     private final int STROKE_width = 5;
     private Point circlePoint = new Point(); //圆心
@@ -63,7 +65,8 @@ public class ClipView extends View{
 
     @Override
     protected void onDraw(Canvas canvas) {
-        if (!isInitDraw) return;
+        super.onDraw(canvas);
+        if (!isInitDrawRect) return;
 //        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
         int left = startPoint.x;
         int top = startPoint.y;
@@ -94,8 +97,8 @@ public class ClipView extends View{
         int y = (int)event.getY();
         switch (event.getAction()){
             case MotionEvent.ACTION_DOWN:
-                if (!isInitDraw){
-                    isInitDraw = true;
+                if (!isInitDrawRect){
+                    isInitDrawRect = true;
                     startPoint.set(checkBorderX(x), checkBorderY(y));
                     postInvalidate();
                 }else {
@@ -140,7 +143,6 @@ public class ClipView extends View{
                 postInvalidate();
                 break;
             case MotionEvent.ACTION_UP:
-                endPoint.set(startPoint.x + width,startPoint.y + height);
                 break;
         }
         return true;
@@ -153,7 +155,7 @@ public class ClipView extends View{
      * @return
      */
     private boolean checkBorderMoveX(int distanceX){
-        if (startPoint.x + width + distanceX < getMeasuredWidth()){
+        if (startPoint.x > 0 && startPoint.x + width + distanceX < getMeasuredWidth()){
             return true;
         }
         return false;
@@ -165,7 +167,7 @@ public class ClipView extends View{
      * @return
      */
     private boolean checkBorderMoveY(int distanceY){
-        if (startPoint.y + height + distanceY < getMeasuredHeight()){
+        if (startPoint.y > 0 && startPoint.y + height + distanceY < getMeasuredHeight()){
             return true;
         }
         return false;
@@ -246,4 +248,41 @@ public class ClipView extends View{
    private int get2PointDistance(int startX,int startY,int endX,int endY){
        return (int) Math.sqrt(Math.pow(startX - endX, 2) + Math.pow(startY - endY, 2));
    }
+
+    /**
+     * 进行裁剪
+     * @return
+     */
+    public Bitmap clip(){
+        Drawable drawable = getDrawable();
+        if (drawable == null || !(drawable instanceof BitmapDrawable)){
+            return null;
+        }
+        Bitmap bitmap = ((BitmapDrawable)drawable).getBitmap();
+
+        final float[] matrixValues = new float[9];
+        getImageMatrix().getValues(matrixValues);
+
+        final float scaleX = matrixValues[Matrix.MSCALE_X];
+        final float scaleY = matrixValues[Matrix.MSCALE_Y];
+        final float transX = matrixValues[Matrix.MTRANS_X];
+        final float transY = matrixValues[Matrix.MTRANS_Y];
+
+        float bitmapLeft = (transX < 0) ? Math.abs(transX) : 0;
+        float bitmapTop = (transY < 0) ? Math.abs(transY) : 0;
+        float clipX = (bitmapLeft + startPoint.x - transX) / scaleX;
+        float clipY = (bitmapTop + startPoint.y - transY) / scaleY;
+        float clipWidth = width / scaleX ;
+        float clipHeight = height / scaleY ;
+
+        if (clipX + clipWidth > bitmap.getWidth()){
+            clipWidth = bitmap.getWidth() - clipX;
+        }
+
+        if (clipY + clipHeight > bitmap.getHeight()){
+            clipHeight = bitmap.getHeight() - clipY;
+        }
+
+        return Bitmap.createBitmap(bitmap,(int)clipX,(int)clipY,(int)clipWidth,(int)clipHeight);
+    }
 }
